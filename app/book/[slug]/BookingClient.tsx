@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Activity, Clock, Users, CheckCircle2, ArrowRight, Share2,
-  Copy, MapPin, Phone, Stethoscope, Calendar, AlertCircle, PauseCircle
+  Copy, MapPin, Phone, Stethoscope, Calendar, AlertCircle, PauseCircle,
+  Search, RefreshCw
 } from "lucide-react";
-import { generateToken, formatTime, getTrackingUrl, copyToClipboard, maskName } from "@/lib/utils";
+import { generateToken, formatTime, getTrackingUrl, copyToClipboard } from "@/lib/utils";
 import { toast } from "sonner";
-import type { Doctor, Pharmacy, Session, Appointment } from "@/lib/types";
+import type { Doctor, Pharmacy, Session, Appointment, DoctorSchedule } from "@/lib/types";
 
 type SessionWithAppointments = Session & {
   appointments: { status: string }[];
@@ -17,7 +18,10 @@ interface Props {
   pharmacy: Pharmacy;
   doctors: Doctor[];
   sessions: SessionWithAppointments[];
+  schedules: DoctorSchedule[];
 }
+
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 type BookingStep = "select-doctor" | "fill-form" | "confirmed";
 
@@ -29,10 +33,16 @@ interface BookingResult {
   estimatedWait: number;
 }
 
-export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
+export default function BookingClient({ pharmacy, doctors, sessions, schedules }: Props) {
   // Separate sessions where booking is open vs paused
   const openSessions = sessions.filter((s) => s.booking_open);
   const allPaused = sessions.length > 0 && openSessions.length === 0;
+
+  const [activeTab, setActiveTab] = useState<"book" | "track">("book");
+  const [trackPhone, setTrackPhone] = useState("");
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackResults, setTrackResults] = useState<(Appointment & { doctor?: Doctor; session?: Session; queue_position?: number; estimated_wait?: number })[] | null>(null);
+  const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [step, setStep] = useState<BookingStep>(doctors.length === 1 ? "fill-form" : "select-doctor");
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(doctors.length === 1 ? doctors[0] : null);
@@ -48,6 +58,32 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
     patient_gender: "",
     reason: "",
   });
+
+  // --- Track logic ---
+  async function searchByPhone(phone: string) {
+    const normalized = phone.trim();
+    if (!normalized) { toast.error("Enter your phone number"); return; }
+    setTrackLoading(true);
+    try {
+      const res = await fetch(`/api/track?pharmacy_id=${pharmacy.id}&phone=${encodeURIComponent(normalized)}`);
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error || "Search failed"); return; }
+      setTrackResults(json.appointments || []);
+      // Start auto-refresh every 30s
+      if (refreshRef.current) clearInterval(refreshRef.current);
+      refreshRef.current = setInterval(() => searchByPhone(normalized), 30000);
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setTrackLoading(false);
+    }
+  }
+
+  useEffect(() => () => { if (refreshRef.current) clearInterval(refreshRef.current); }, []);
+
+  function getDoctorSchedules(doctorId: string) {
+    return schedules.filter((s) => s.doctor_id === doctorId && s.is_active);
+  }
 
   function getDoctorSessions(doctorId: string) {
     return openSessions.filter((s) => s.doctor_id === doctorId);
@@ -254,7 +290,131 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
         )}
       </div>
 
-      <div className="max-w-md mx-auto p-4 pt-6">
+      {/* Tab switcher */}
+      <div className="max-w-md mx-auto px-4 pt-4">
+        <div className="flex bg-white border border-border rounded-2xl p-1 shadow-sm">
+          <button
+            onClick={() => setActiveTab("book")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "book" ? "bg-gradient-to-r from-blue-600 to-teal-600 text-white shadow-md" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Book Appointment
+          </button>
+          <button
+            onClick={() => setActiveTab("track")}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "track" ? "bg-gradient-to-r from-blue-600 to-teal-600 text-white shadow-md" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Track My Queue
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-md mx-auto p-4 pt-4">
+
+        {/* ===== TRACK TAB ===== */}
+        {activeTab === "track" && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-3xl border border-border shadow-xl overflow-hidden">
+              <div className="px-6 py-5 border-b border-border">
+                <h2 className="font-bold text-foreground">Track Your Position</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Enter your phone number to see your queue status</p>
+              </div>
+              <div className="p-6">
+                <div className="flex gap-2">
+                  <input
+                    type="tel"
+                    value={trackPhone}
+                    onChange={(e) => setTrackPhone(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && searchByPhone(trackPhone)}
+                    placeholder="01XXXXXXXXX"
+                    className="flex-1 h-12 px-4 rounded-xl border border-input text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  />
+                  <button
+                    onClick={() => searchByPhone(trackPhone)}
+                    disabled={trackLoading}
+                    className="h-12 px-4 bg-gradient-to-r from-blue-600 to-teal-600 text-white rounded-xl font-bold text-sm flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {trackLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    Find
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {trackResults !== null && (
+              trackResults.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-border p-8 text-center">
+                  <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="font-semibold text-foreground">No bookings found</p>
+                  <p className="text-sm text-muted-foreground mt-1">No active appointments found for this phone number today.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-foreground">Your Appointments</p>
+                    <button onClick={() => searchByPhone(trackPhone)} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700">
+                      <RefreshCw className="w-3 h-3" />Refresh
+                    </button>
+                  </div>
+                  {trackResults.map((apt) => {
+                    const statusColor: Record<string, string> = {
+                      waiting: "bg-blue-50 border-blue-200 text-blue-700",
+                      called: "bg-amber-50 border-amber-200 text-amber-700",
+                      "in-progress": "bg-green-50 border-green-200 text-green-700",
+                      completed: "bg-gray-50 border-gray-200 text-gray-500",
+                      cancelled: "bg-red-50 border-red-200 text-red-500",
+                    };
+                    const statusLabel: Record<string, string> = {
+                      waiting: "Waiting",
+                      called: "Called — please come!",
+                      "in-progress": "In consultation",
+                      completed: "Done",
+                      cancelled: "Cancelled",
+                    };
+                    return (
+                      <div key={apt.id} className={`bg-white rounded-2xl border p-5 ${apt.status === "called" ? "border-amber-300 ring-2 ring-amber-300/50 animate-pulse" : "border-border"}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-3xl font-black text-blue-700">#{apt.serial_number.toString().padStart(2, "0")}</span>
+                            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded-lg text-muted-foreground">{apt.token}</span>
+                          </div>
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${statusColor[apt.status] || "bg-muted text-muted-foreground border-border"}`}>
+                            {statusLabel[apt.status] || apt.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                          {apt.queue_position != null && apt.status === "waiting" && (
+                            <span className="flex items-center gap-1 font-semibold text-blue-700">
+                              <Users className="w-3 h-3" />{apt.queue_position} ahead of you
+                            </span>
+                          )}
+                          {apt.estimated_wait != null && apt.status === "waiting" && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />~{apt.estimated_wait} min wait
+                            </span>
+                          )}
+                        </div>
+                        {apt.status === "called" && (
+                          <p className="mt-2 text-sm font-bold text-amber-700 flex items-center gap-1.5">
+                            🔔 Please proceed to the doctor now!
+                          </p>
+                        )}
+                        <div className="mt-3 pt-3 border-t border-border">
+                          <a href={getTrackingUrl(apt.token)} className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3" />Open live tracking page
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <p className="text-center text-xs text-muted-foreground">Auto-refreshes every 30 seconds</p>
+                </div>
+              )
+            )}
+          </div>
+        )}
+
+        {/* ===== BOOK TAB ===== */}
+        {activeTab === "book" && (<>
         {/* No sessions available */}
         {sessions.length === 0 && (
           <div className="bg-white rounded-3xl border border-border shadow-xl p-8 text-center">
@@ -337,6 +497,14 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
                             <span className="text-xs text-muted-foreground">৳{doctor.consultation_fee} fee</span>
                           )}
                         </div>
+                        {getDoctorSchedules(doctor.id).length > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                            <Calendar className="w-3 h-3 text-muted-foreground" />
+                            {getDoctorSchedules(doctor.id).sort((a,b)=>a.day_of_week-b.day_of_week).map((s) => (
+                              <span key={s.id} className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">{DAYS[s.day_of_week]}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
@@ -541,6 +709,7 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
             )}
           </div>
         )}
+        </>)}
       </div>
 
       {/* Footer */}

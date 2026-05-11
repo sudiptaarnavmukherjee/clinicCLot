@@ -87,11 +87,19 @@ export default async function BookingPage({ params }: Props) {
     .order("date")
     .order("start_time");
 
+  const { data: schedules } = await supabase
+    .from("doctor_schedules")
+    .select("*")
+    .eq("pharmacy_id", pharmacy.id)
+    .eq("is_active", true)
+    .order("day_of_week");
+
   return (
     <BookingClient
       pharmacy={pharmacy}
       doctors={doctors || []}
       sessions={sessions || []}
+      schedules={schedules || []}
     />
   );
 }

@@ -578,6 +578,12 @@ export default function QueueClient({
           doctorId={selectedSession?.doctor_id || ""}
           currentCount={appointments.filter((a) => a.status !== "cancelled").length}
           onClose={() => setShowAddPatient(false)}
+          onAdded={(apt) => {
+            setAppointments((prev) => {
+              if (prev.find((a) => a.id === apt.id)) return prev;
+              return [...prev, apt].sort((a, b) => a.serial_number - b.serial_number);
+            });
+          }}
         />
       )}
     </div>

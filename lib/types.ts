@@ -171,3 +171,16 @@ export interface PatientQueueView {
   pharmacy: Pharmacy;
   doctor: Doctor;
 }
+
+export interface DoctorSchedule {
+  id: string;
+  doctor_id: string;
+  pharmacy_id: string;
+  day_of_week: number; // 0=Sun, 1=Mon, ... 6=Sat
+  start_time: string;
+  end_time: string;
+  max_appointments: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}

@@ -25,13 +25,19 @@ export default async function DoctorsPage() {
     .order("sort_order")
     .order("created_at");
 
+  const { data: schedules } = await supabase
+    .from("doctor_schedules")
+    .select("*")
+    .eq("pharmacy_id", pharmacy.id)
+    .order("day_of_week");
+
   return (
     <DashboardShell
       pharmacyName={pharmacy.name}
       pageTitle="Doctors"
       pageDescription="Manage doctors and their profiles"
     >
-      <DoctorsClient pharmacy={pharmacy} initialDoctors={doctors || []} />
+      <DoctorsClient pharmacy={pharmacy} initialDoctors={doctors || []} initialSchedules={schedules || []} />
     </DashboardShell>
   );
 }

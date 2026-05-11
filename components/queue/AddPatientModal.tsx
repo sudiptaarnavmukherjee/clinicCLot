@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { X, UserPlus, AlertCircle } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { generateToken } from "@/lib/utils";
 import { toast } from "sonner";
+import type { Appointment } from "@/lib/types";
 
 interface Props {
   sessionId: string;
@@ -12,9 +12,10 @@ interface Props {
   doctorId: string;
   currentCount: number;
   onClose: () => void;
+  onAdded?: (appointment: Appointment) => void;
 }
 
-export default function AddPatientModal({ sessionId, pharmacyId, doctorId, currentCount, onClose }: Props) {
+export default function AddPatientModal({ sessionId, pharmacyId, doctorId, currentCount, onClose, onAdded }: Props) {
   const [form, setForm] = useState({
     patient_name: "",
     patient_phone: "",
@@ -37,31 +38,34 @@ export default function AddPatientModal({ sessionId, pharmacyId, doctorId, curre
     }
     setLoading(true);
     try {
-      const supabase = createClient();
-      const serialNumber = currentCount + 1;
       const token = generateToken(8);
-
-      const { error } = await supabase.from("appointments").insert({
-        session_id: sessionId,
-        doctor_id: doctorId,
-        pharmacy_id: pharmacyId,
-        patient_name: form.patient_name.trim(),
-        patient_phone: form.patient_phone.trim() || null,
-        patient_age: form.patient_age ? parseInt(form.patient_age) : null,
-        patient_gender: form.patient_gender || null,
-        reason: form.reason.trim() || null,
-        serial_number: serialNumber,
-        token,
-        status: "waiting",
-        is_priority: form.is_priority,
+      const res = await fetch("/api/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          pharmacy_id: pharmacyId,
+          doctor_id: doctorId,
+          patient_name: form.patient_name.trim(),
+          patient_phone: form.patient_phone.trim() || null,
+          patient_age: form.patient_age ? parseInt(form.patient_age) : null,
+          patient_gender: form.patient_gender || null,
+          reason: form.reason.trim() || null,
+          is_priority: form.is_priority,
+          token,
+        }),
       });
 
-      if (error) {
-        toast.error("Failed to add patient: " + error.message);
+      const json = await res.json();
+
+      if (!res.ok) {
+        toast.error(json.error || "Failed to add patient");
         return;
       }
 
-      toast.success(`Added: ${form.patient_name} as #${serialNumber}`);
+      const apt: Appointment = json.appointment;
+      toast.success(`Added: ${apt.patient_name} as #${apt.serial_number}`);
+      onAdded?.(apt);
       onClose();
     } finally {
       setLoading(false);
