@@ -37,7 +37,7 @@ export default async function SessionsPage({
   const todayStr = now.toISOString().split("T")[0];
 
   const activeRecurring = (recurringSessions || []).filter(
-    (rs) => rs.is_active && Array.isArray(rs.days_of_week) && rs.days_of_week.includes(todayDow)
+    (rs) => rs.is_active && rs.day_of_week === todayDow
   );
 
   for (const rs of activeRecurring) {
@@ -91,7 +91,7 @@ export default async function SessionsPage({
         pharmacy={pharmacy}
         doctors={doctors || []}
         initialSessions={sessions || []}
-        initialRecurringSessions={(recurringSessions || []) as Parameters<typeof SessionsClient>[0]["initialRecurringSessions"]}
+        initialRecurringSessions={recurringSessions || []}
         openNew={openNew}
       />
     </DashboardShell>

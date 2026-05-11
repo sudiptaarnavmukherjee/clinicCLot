@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   PlayCircle, PauseCircle, StopCircle, ChevronRight,
@@ -47,6 +47,10 @@ export default function QueueClient({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(true);
   const [showAddPatient, setShowAddPatient] = useState(false);
+
+  // Keep a ref to latest appointments for use inside stable callbacks
+  const appointmentsRef = useRef(appointments);
+  useEffect(() => { appointmentsRef.current = appointments; }, [appointments]);
 
   const supabase = createClient();
   const selectedSession = sessions.find((s) => s.id === selectedSessionId) as SessionWithDoctor | undefined;
@@ -125,25 +129,42 @@ export default function QueueClient({
       .then(({ data }) => setAppointments(data || []));
   }
 
-  // Update appointment status
+  // Update appointment status — optimistic update, revert on error
   const updateAppointmentStatus = useCallback(
     async (appointmentId: string, newStatus: string) => {
+      const now = new Date().toISOString();
+      const updateData: Record<string, unknown> = { status: newStatus };
+      if (newStatus === "called") updateData.called_at = now;
+      if (newStatus === "in-progress") updateData.started_at = now;
+      if (newStatus === "completed" || newStatus === "skipped" || newStatus === "no-show") {
+        updateData.completed_at = now;
+      }
+
+      // Snapshot for rollback
+      const previous = appointmentsRef.current.find((a) => a.id === appointmentId);
+
+      // Optimistic: update local state immediately
+      setAppointments((prev) =>
+        prev.map((a) =>
+          a.id === appointmentId ? { ...a, ...updateData } as Appointment : a
+        )
+      );
+
       setActionLoading(appointmentId + newStatus);
       try {
-        const updateData: Record<string, unknown> = { status: newStatus };
-        if (newStatus === "called") updateData.called_at = new Date().toISOString();
-        if (newStatus === "in-progress") updateData.started_at = new Date().toISOString();
-        if (newStatus === "completed" || newStatus === "skipped" || newStatus === "no-show") {
-          updateData.completed_at = new Date().toISOString();
-        }
-
         const { error } = await supabase
           .from("appointments")
           .update(updateData)
           .eq("id", appointmentId);
 
         if (error) {
-          toast.error("Failed to update status");
+          toast.error("Failed to update — please try again");
+          // Revert optimistic update
+          if (previous) {
+            setAppointments((prev) =>
+              prev.map((a) => (a.id === appointmentId ? previous : a))
+            );
+          }
         }
       } finally {
         setActionLoading(null);
@@ -173,9 +194,11 @@ export default function QueueClient({
     toast.success(`Called: ${nextWaiting.patient_name} (#${nextWaiting.serial_number})`);
   }
 
-  // Toggle session status
+  // Toggle session status — optimistic
   async function toggleSessionStatus(newStatus: string) {
     if (!selectedSessionId) return;
+    const previous = sessionStatus;
+    setSessionStatus(newStatus); // optimistic
     setActionLoading("session-" + newStatus);
     try {
       const { error } = await supabase
@@ -185,8 +208,8 @@ export default function QueueClient({
 
       if (error) {
         toast.error("Failed to update session");
+        setSessionStatus(previous); // revert
       } else {
-        setSessionStatus(newStatus);
         const labels: Record<string, string> = {
           active: "Session is now live!",
           paused: "Session paused",

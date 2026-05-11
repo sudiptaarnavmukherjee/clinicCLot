@@ -93,7 +93,7 @@ export interface RecurringSession {
   id: string;
   pharmacy_id: string;
   doctor_id: string;
-  days_of_week: number[];
+  day_of_week: number; // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
   start_time: string;
   end_time: string;
   max_appointments: number;

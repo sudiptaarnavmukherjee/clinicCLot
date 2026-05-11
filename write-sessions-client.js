@@ -1,4 +1,5 @@
-"use client";
+const fs = require('fs');
+const content = `"use client";
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -290,7 +291,7 @@ export default function SessionsClient({
                 </span>
                 <span className="text-xs text-muted-foreground flex items-center gap-1 flex-1 min-w-0">
                   <Clock className="w-3 h-3 flex-shrink-0" />
-                  <span className="truncate">{formatTime(rs.start_time)} – {formatTime(rs.end_time)} <span className="text-[10px]">· {rs.max_appointments} max</span></span>
+                  <span className="truncate">{formatTime(rs.start_time)} \u2013 {formatTime(rs.end_time)} <span className="text-[10px]">\u00b7 {rs.max_appointments} max</span></span>
                 </span>
                 <div className="flex gap-1 flex-shrink-0">
                   <button onClick={() => openEdit(rs)} title="Edit this day" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors">
@@ -356,11 +357,11 @@ export default function SessionsClient({
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {session.doctors?.specialty} {session.doctors?.specialty ? "·" : ""} {format(parseISO(session.date), "dd MMM yyyy")}
+              {session.doctors?.specialty} {session.doctors?.specialty ? "\u00b7" : ""} {format(parseISO(session.date), "dd MMM yyyy")}
             </p>
             <p className="text-xs text-muted-foreground">
               <Clock className="w-3 h-3 inline mr-1" />
-              {formatTime(session.start_time)} to {formatTime(session.end_time)} · Max {session.max_appointments}
+              {formatTime(session.start_time)} to {formatTime(session.end_time)} \u00b7 Max {session.max_appointments}
             </p>
           </div>
 
@@ -580,7 +581,7 @@ export default function SessionsClient({
                       const isSelected = !!form.daySlots[i];
                       return (
                         <button key={i} type="button"
-                          onClick={() => { if (!isTaken) toggleDay(i); else toast.info(day + " already scheduled — use Edit to change times"); }}
+                          onClick={() => { if (!isTaken) toggleDay(i); else toast.info(day + " already scheduled \u2014 use Edit to change times"); }}
                           title={isTaken ? "Already scheduled for this doctor" : undefined}
                           className={"py-2.5 rounded-xl text-xs font-bold text-center transition-all border " + (
                             isTaken
@@ -680,3 +681,6 @@ export default function SessionsClient({
     </div>
   );
 }
+`;
+fs.writeFileSync('c:/clinicCLot/app/(dashboard)/sessions/SessionsClient.tsx', content, 'utf8');
+console.log('Done:', content.length, 'chars');
