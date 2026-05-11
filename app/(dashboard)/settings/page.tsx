@@ -10,7 +10,7 @@ export default async function SettingsPage() {
   const { data: pharmacy } = await supabase
     .from("pharmacies")
     .select("*")
-    .eq("owner_id", user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (!pharmacy) redirect("/dashboard");

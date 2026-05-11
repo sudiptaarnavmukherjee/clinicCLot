@@ -21,12 +21,13 @@ interface Props {
   pharmacy: Pharmacy;
   doctors: Doctor[];
   initialSessions: SessionWithDoctor[];
+  openNew?: boolean;
 }
 
-export default function SessionsClient({ pharmacy, doctors, initialSessions }: Props) {
+export default function SessionsClient({ pharmacy, doctors, initialSessions, openNew = false }: Props) {
   const router = useRouter();
   const [sessions, setSessions] = useState(initialSessions);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(openNew);
   const [loading, setLoading] = useState(false);
   const [today] = useState(new Date().toISOString().split("T")[0]);
   const [form, setForm] = useState({
@@ -42,6 +43,15 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions }: P
     e.preventDefault();
     if (!form.doctor_id || !form.date || !form.start_time || !form.end_time) {
       toast.error("Please fill all required fields");
+      return;
+    }
+    if (form.end_time <= form.start_time) {
+      toast.error("End time must be after start time");
+      return;
+    }
+    const maxApt = parseInt(form.max_appointments);
+    if (isNaN(maxApt) || maxApt < 1 || maxApt > 500) {
+      toast.error("Max appointments must be between 1 and 500");
       return;
     }
     setLoading(true);

@@ -107,7 +107,7 @@ export default function DashboardClient({ pharmacy, sessions, stats }: Props) {
               <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(), "EEEE, dd MMMM yyyy")}</p>
             </div>
             <Link
-              href="/sessions/new"
+              href="/sessions?new=1"
               className="flex items-center gap-1.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-teal-600 px-4 py-2 rounded-xl hover:shadow-md transition-all"
             >
               <Plus className="w-4 h-4" />
@@ -122,7 +122,7 @@ export default function DashboardClient({ pharmacy, sessions, stats }: Props) {
                 <p className="text-sm font-medium text-muted-foreground">No sessions today</p>
                 <p className="text-xs text-muted-foreground/70 mt-1">Create a session to start accepting patients</p>
                 <Link
-                  href="/sessions/new"
+                  href="/sessions?new=1"
                   className="inline-flex items-center gap-2 mt-4 text-sm font-semibold text-primary hover:underline"
                 >
                   <Plus className="w-4 h-4" />
@@ -214,7 +214,7 @@ export default function DashboardClient({ pharmacy, sessions, stats }: Props) {
             <div className="space-y-2">
               {[
                 { href: "/queue", label: "Open Live Queue", icon: Activity, color: "text-green-600 bg-green-50" },
-                { href: "/sessions/new", label: "New Session", icon: Plus, color: "text-blue-600 bg-blue-50" },
+                { href: "/sessions?new=1", label: "New Session", icon: Plus, color: "text-blue-600 bg-blue-50" },
                 { href: "/doctors/new", label: "Add Doctor", icon: Users, color: "text-purple-600 bg-purple-50" },
                 { href: "/analytics", label: "View Analytics", icon: TrendingUp, color: "text-amber-600 bg-amber-50" },
               ].map((action) => (

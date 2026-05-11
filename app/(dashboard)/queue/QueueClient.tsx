@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   PlayCircle, PauseCircle, StopCircle, ChevronRight,
   Check, SkipForward, UserX, Plus, Clock, Users,
@@ -39,7 +39,6 @@ export default function QueueClient({
   initialSessionId,
 }: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [selectedSessionId, setSelectedSessionId] = useState(initialSessionId);
   const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
   const [sessionStatus, setSessionStatus] = useState<string>(
@@ -243,7 +242,7 @@ export default function QueueClient({
           <h2 className="text-xl font-bold text-foreground mb-2">No session selected</h2>
           <p className="text-muted-foreground mb-6">Create a session to start managing the queue</p>
           <a
-            href="/sessions/new"
+            href="/sessions?new=1"
             className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-teal-600 text-white font-semibold px-6 py-3 rounded-xl hover:shadow-lg transition-all"
           >
             <Plus className="w-4 h-4" />

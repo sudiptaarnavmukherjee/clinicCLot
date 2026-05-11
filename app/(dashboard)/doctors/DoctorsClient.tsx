@@ -55,6 +55,16 @@ export default function DoctorsClient({ pharmacy, initialDoctors }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) { toast.error("Doctor name is required"); return; }
+    if (form.name.trim().length > 255) { toast.error("Name is too long"); return; }
+
+    const fee = parseFloat(form.consultation_fee);
+    if (form.consultation_fee && (isNaN(fee) || fee < 0 || fee > 999999)) {
+      toast.error("Invalid consultation fee"); return;
+    }
+    const duration = parseInt(form.avg_consultation_duration);
+    if (isNaN(duration) || duration < 1 || duration > 480) {
+      toast.error("Consultation duration must be between 1–480 minutes"); return;
+    }
     setLoading(true);
     try {
       const supabase = createClient();

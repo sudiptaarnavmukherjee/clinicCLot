@@ -5,7 +5,6 @@ import {
   Activity, Clock, Users, CheckCircle2, ArrowRight, Share2,
   Copy, MapPin, Phone, Stethoscope, Calendar, AlertCircle
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { generateToken, formatTime, getTrackingUrl, copyToClipboard, maskName } from "@/lib/utils";
 import { toast } from "sonner";
 import type { Doctor, Pharmacy, Session, Appointment } from "@/lib/types";
@@ -64,24 +63,16 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
     if (!selectedSession) { toast.error("Please select a session"); return; }
     if (!selectedDoctor) { toast.error("No doctor selected"); return; }
 
-    // Check capacity
-    const activeApts = selectedSession.appointments?.filter((a) => !["cancelled"].includes(a.status)).length || 0;
-    if (activeApts >= selectedSession.max_appointments) {
-      toast.error("This session is full. No more bookings available.");
-      return;
-    }
+    const waitingBefore = selectedSession.appointments?.filter((a) => a.status === "waiting").length || 0;
+    const avgDuration = selectedDoctor.avg_consultation_duration || 10;
+    const token = generateToken(8);
 
     setLoading(true);
     try {
-      const supabase = createClient();
-      const serialNumber = activeApts + 1;
-      const token = generateToken(8);
-      const waitingBefore = selectedSession.appointments?.filter((a) => a.status === "waiting").length || 0;
-      const avgDuration = selectedDoctor.avg_consultation_duration || 10;
-
-      const { data, error } = await supabase
-        .from("appointments")
-        .insert({
+      const res = await fetch("/api/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           session_id: selectedSession.id,
           doctor_id: selectedDoctor.id,
           pharmacy_id: pharmacy.id,
@@ -90,28 +81,23 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
           patient_age: form.patient_age ? parseInt(form.patient_age) : null,
           patient_gender: form.patient_gender || null,
           reason: form.reason.trim() || null,
-          serial_number: serialNumber,
           token,
-          status: "waiting",
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (error) {
-        if (error.code === "23505") {
-          toast.error("This serial number is taken. Please try again.");
-        } else {
-          toast.error(error.message);
-        }
+      const json = await res.json();
+
+      if (!res.ok) {
+        toast.error(json.error || "Booking failed. Please try again.");
         return;
       }
 
       setResult({
-        appointment: data,
+        appointment: json.appointment,
         doctor: selectedDoctor,
         session: selectedSession,
         position: waitingBefore,
-        estimatedWait: (waitingBefore) * avgDuration,
+        estimatedWait: waitingBefore * avgDuration,
       });
       setStep("confirmed");
     } finally {

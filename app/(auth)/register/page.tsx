@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Activity, Mail, Lock, Eye, EyeOff, Store, Phone, MapPin, ArrowRight, CheckCircle
@@ -14,9 +14,13 @@ const STEPS = ["Account", "Pharmacy", "Done"];
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const searchParams = useSearchParams();
+  const isSetup = searchParams.get("setup") === "1";
+  // If ?setup=1, user is already authenticated — jump to pharmacy step
+  const [step, setStep] = useState(isSetup ? 1 : 0);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [existingUser, setExistingUser] = useState<{ id: string; email: string } | null>(null);
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -24,6 +28,15 @@ export default function RegisterPage() {
     phone: "",
     address: "",
   });
+
+  // Load existing session user when in setup mode (?setup=1)
+  useEffect(() => {
+    if (isSetup) {
+      createClient().auth.getUser().then(({ data }) => {
+        if (data.user) setExistingUser({ id: data.user.id, email: data.user.email! });
+      });
+    }
+  }, [isSetup]);
 
   function updateForm(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -43,27 +56,51 @@ export default function RegisterPage() {
 
     try {
       const supabase = createClient();
+      let userId: string;
+      let userEmail: string;
 
-      // 1. Sign up user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-      });
+      if (isSetup && existingUser) {
+        // User already authenticated — just create the pharmacy
+        userId = existingUser.id;
+        userEmail = existingUser.email;
+      } else {
+        // 1. Sign up new user
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: form.email,
+          password: form.password,
+        });
 
-      if (authError || !authData.user) {
-        toast.error(authError?.message || "Registration failed");
-        return;
+        if (authError || !authData.user) {
+          toast.error(authError?.message || "Registration failed");
+          return;
+        }
+
+        // Ensure session is set before inserting (email confirm is disabled)
+        if (authData.session) {
+          await supabase.auth.setSession(authData.session);
+        }
+
+        userId = authData.user.id;
+        userEmail = form.email;
       }
 
-      // 2. Create pharmacy profile
-      const slug = generateSlug(form.pharmacy_name);
+      // Create pharmacy profile
+      const slug =
+        form.pharmacy_name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 50) +
+        "-" +
+        Math.random().toString(36).slice(2, 6);
+
       const { error: pharmacyError } = await supabase.from("pharmacies").insert({
-        user_id: authData.user.id,
+        user_id: userId,
         name: form.pharmacy_name,
-        slug: slug + "-" + Math.random().toString(36).slice(2, 6),
+        slug,
         phone: form.phone || null,
         address: form.address || null,
-        email: form.email,
+        email: userEmail,
       });
 
       if (pharmacyError) {
@@ -72,6 +109,7 @@ export default function RegisterPage() {
       }
 
       setStep(2);
+      setTimeout(() => router.push("/dashboard"), 2000);
     } catch {
       toast.error("An error occurred. Please try again.");
     } finally {
@@ -127,7 +165,7 @@ export default function RegisterPage() {
             </div>
             <h2 className="text-2xl font-bold text-foreground mb-3">You&apos;re all set! 🎉</h2>
             <p className="text-muted-foreground mb-8 leading-relaxed">
-              Your pharmacy is registered. Check your email to verify your account, then log in to start managing your queue.
+              Your pharmacy is registered. You can now log in and start managing your queue.
             </p>
             <Link
               href="/login"

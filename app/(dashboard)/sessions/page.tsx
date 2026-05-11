@@ -5,7 +5,11 @@ import SessionsClient from "./SessionsClient";
 
 export const metadata = { title: "Sessions" };
 
-export default async function SessionsPage() {
+export default async function SessionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -35,13 +39,16 @@ export default async function SessionsPage() {
     .order("date", { ascending: false })
     .order("start_time", { ascending: false });
 
+  const params = await searchParams;
+  const openNew = params.new === "1";
+
   return (
     <DashboardShell
       pharmacyName={pharmacy.name}
       pageTitle="Sessions"
       pageDescription="Schedule and manage doctor availability sessions"
     >
-      <SessionsClient pharmacy={pharmacy} doctors={doctors || []} initialSessions={sessions || []} />
+      <SessionsClient pharmacy={pharmacy} doctors={doctors || []} initialSessions={sessions || []} openNew={openNew} />
     </DashboardShell>
   );
 }

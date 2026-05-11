@@ -17,7 +17,7 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .single();
 
-  if (!pharmacy) redirect("/register");
+  if (!pharmacy) redirect("/register?setup=1");
 
   // Today's date
   const today = new Date().toISOString().split("T")[0];

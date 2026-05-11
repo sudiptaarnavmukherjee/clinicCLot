@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   description:
     "The world's best doctor booking and queue management system for small clinics and pharmacies. Real-time queue tracking, instant updates, and seamless booking.",
   keywords: ["clinic booking", "doctor appointment", "queue management"],
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ClinicQ",
+  },
   openGraph: {
     type: "website",
     siteName: "ClinicQ",

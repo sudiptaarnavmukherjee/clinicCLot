@@ -46,8 +46,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from auth pages
-  if ((pathname === "/login" || pathname === "/register") && user) {
+  // Redirect authenticated users away from login only (not register — they may need to complete pharmacy setup)
+  if (pathname === '/login' && user) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return NextResponse.redirect(url);
