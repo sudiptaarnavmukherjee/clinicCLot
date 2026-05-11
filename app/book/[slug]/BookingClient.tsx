@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Activity, Clock, Users, CheckCircle2, ArrowRight, Share2,
-  Copy, MapPin, Phone, Stethoscope, Calendar, AlertCircle
+  Copy, MapPin, Phone, Stethoscope, Calendar, AlertCircle, PauseCircle
 } from "lucide-react";
 import { generateToken, formatTime, getTrackingUrl, copyToClipboard, maskName } from "@/lib/utils";
 import { toast } from "sonner";
@@ -30,10 +30,14 @@ interface BookingResult {
 }
 
 export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
+  // Separate sessions where booking is open vs paused
+  const openSessions = sessions.filter((s) => s.booking_open);
+  const allPaused = sessions.length > 0 && openSessions.length === 0;
+
   const [step, setStep] = useState<BookingStep>(doctors.length === 1 ? "fill-form" : "select-doctor");
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(doctors.length === 1 ? doctors[0] : null);
   const [selectedSession, setSelectedSession] = useState<SessionWithAppointments | null>(
-    sessions.length === 1 ? sessions[0] : null
+    openSessions.length === 1 ? openSessions[0] : null
   );
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BookingResult | null>(null);
@@ -46,7 +50,7 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
   });
 
   function getDoctorSessions(doctorId: string) {
-    return sessions.filter((s) => s.doctor_id === doctorId);
+    return openSessions.filter((s) => s.doctor_id === doctorId);
   }
 
   function selectDoctor(doctor: Doctor) {
@@ -274,8 +278,30 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
           </div>
         )}
 
+        {/* Booking paused by the clinic */}
+        {allPaused && (
+          <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-8 text-center">
+            <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <PauseCircle className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground mb-2">Booking Temporarily Paused</h2>
+            <p className="text-muted-foreground text-sm">
+              The clinic has paused online booking for now. Please check back in a few minutes or contact the clinic directly.
+            </p>
+            {pharmacy.phone && (
+              <a
+                href={`tel:${pharmacy.phone}`}
+                className="inline-flex items-center gap-2 mt-6 bg-gradient-to-r from-blue-600 to-teal-600 text-white px-6 py-3 rounded-xl text-sm font-semibold"
+              >
+                <Phone className="w-4 h-4" />
+                Call {pharmacy.name}
+              </a>
+            )}
+          </div>
+        )}
+
         {/* Doctor selection step */}
-        {step === "select-doctor" && sessions.length > 0 && (
+        {step === "select-doctor" && openSessions.length > 0 && (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-bold text-foreground mb-1">Select Doctor</h2>
@@ -321,7 +347,7 @@ export default function BookingClient({ pharmacy, doctors, sessions }: Props) {
         )}
 
         {/* Booking form */}
-        {step === "fill-form" && selectedDoctor && (
+        {step === "fill-form" && selectedDoctor && !allPaused && sessions.length > 0 && (
           <div className="space-y-4">
             {/* Doctor info bar */}
             <div className="bg-white rounded-2xl border border-border p-4 flex items-center gap-3">

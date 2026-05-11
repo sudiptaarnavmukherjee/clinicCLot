@@ -72,15 +72,19 @@ export default async function BookingPage({ params }: Props) {
     .eq("is_active", true)
     .order("sort_order");
 
-  // Fetch today's active/scheduled sessions
-  const today = new Date().toISOString().split("T")[0];
+  // Use a ±1-day UTC window so sessions created in any timezone are found
+  const now = new Date();
+  const toDate = (d: Date) => d.toISOString().split("T")[0];
+  const yesterday = new Date(now); yesterday.setUTCDate(now.getUTCDate() - 1);
+  const tomorrow  = new Date(now); tomorrow.setUTCDate(now.getUTCDate() + 1);
   const { data: sessions } = await supabase
     .from("sessions")
     .select("*, appointments(status, serial_number)")
     .eq("pharmacy_id", pharmacy.id)
-    .eq("date", today)
-    .in("status", ["active", "scheduled"])
-    .eq("booking_open", true)
+    .gte("date", toDate(yesterday))
+    .lte("date", toDate(tomorrow))
+    .in("status", ["active", "scheduled", "paused"])
+    .order("date")
     .order("start_time");
 
   return (

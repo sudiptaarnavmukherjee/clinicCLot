@@ -29,7 +29,12 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
   const [sessions, setSessions] = useState(initialSessions);
   const [showForm, setShowForm] = useState(openNew);
   const [loading, setLoading] = useState(false);
-  const [today] = useState(new Date().toISOString().split("T")[0]);
+  // Use local date (not UTC) so the session date matches what the user sees
+  const [today] = useState(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split("T")[0];
+  });
   const [form, setForm] = useState({
     doctor_id: doctors[0]?.id || "",
     date: today,
@@ -68,6 +73,7 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
           max_appointments: parseInt(form.max_appointments) || 30,
           notes: form.notes || null,
           status: "scheduled",
+          booking_open: true,
         })
         .select(`*, doctors(id, name, specialty)`)
         .single();
@@ -99,6 +105,19 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
     toast.success("Session deleted");
   }
 
+  async function toggleBookingOpen(sessionId: string, open: boolean) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("sessions")
+      .update({ booking_open: open })
+      .eq("id", sessionId);
+    if (error) { toast.error(error.message); return; }
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, booking_open: open } : s))
+    );
+    toast.success(open ? "Booking resumed — patients can now book" : "Booking paused — no new bookings accepted");
+  }
+
   const todaySessions = sessions.filter((s) => s.date === today);
   const pastSessions = sessions.filter((s) => s.date !== today);
 
@@ -122,7 +141,7 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
         <div className="p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <p className="font-bold text-foreground">Dr. {session.doctors?.name || "Unknown"}</p>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${statusColor}`}>
                   {session.status}
@@ -130,6 +149,11 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
                     <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                   )}
                 </span>
+                {!session.booking_open && (session.status === "active" || session.status === "scheduled") && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                    Booking Paused
+                  </span>
+                )}
               </div>
               <p className="text-xs text-muted-foreground">
                 {session.doctors?.specialty} · {format(parseISO(session.date), "dd MMM yyyy")}
@@ -218,6 +242,23 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
                 className="flex items-center justify-center p-2 border border-border rounded-xl text-muted-foreground hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {(session.status === "active" || session.status === "scheduled") && (
+              <button
+                onClick={() => toggleBookingOpen(session.id, !session.booking_open)}
+                title={session.booking_open ? "Pause new patient bookings" : "Resume patient bookings"}
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                  session.booking_open
+                    ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                    : "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                }`}
+              >
+                {session.booking_open ? (
+                  <><PauseCircle className="w-3.5 h-3.5" /><span>Booking</span></>
+                ) : (
+                  <><PlayCircle className="w-3.5 h-3.5" /><span>Booking</span></>
+                )}
               </button>
             )}
           </div>
