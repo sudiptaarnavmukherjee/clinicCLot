@@ -79,7 +79,7 @@ export default async function BookingPage({ params }: Props) {
   const tomorrow  = new Date(now); tomorrow.setUTCDate(now.getUTCDate() + 1);
   const { data: sessions } = await supabase
     .from("sessions")
-    .select("*, appointments(status, serial_number)")
+    .select("*, appointments(status)")
     .eq("pharmacy_id", pharmacy.id)
     .gte("date", toDate(yesterday))
     .lte("date", toDate(tomorrow))

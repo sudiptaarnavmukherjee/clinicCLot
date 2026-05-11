@@ -23,15 +23,20 @@ export default async function QueuePage({
   if (!pharmacy) redirect("/register");
 
   const params = await searchParams;
-  const today = new Date().toISOString().split("T")[0];
+  // ±1-day UTC window so sessions created in any timezone are always visible
+  const utcNow = new Date();
+  const utcYesterday = new Date(utcNow); utcYesterday.setUTCDate(utcNow.getUTCDate() - 1);
+  const utcTomorrow  = new Date(utcNow); utcTomorrow.setUTCDate(utcNow.getUTCDate() + 1);
 
   // Fetch sessions for today + any active session passed in URL
   const { data: sessions } = await supabase
     .from("sessions")
     .select("*, doctors(id, name, specialty, avg_consultation_duration)")
     .eq("pharmacy_id", pharmacy.id)
-    .eq("date", today)
+    .gte("date", utcYesterday.toISOString().split("T")[0])
+    .lte("date", utcTomorrow.toISOString().split("T")[0])
     .neq("status", "cancelled")
+    .order("date")
     .order("start_time");
 
   const selectedSessionId = params.session || sessions?.[0]?.id || null;

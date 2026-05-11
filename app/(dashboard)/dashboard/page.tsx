@@ -19,24 +19,32 @@ export default async function DashboardPage() {
 
   if (!pharmacy) redirect("/register?setup=1");
 
-  // Today's date
-  const today = new Date().toISOString().split("T")[0];
+  // Fetch sessions: use a ±1-day window around UTC now so any local-timezone date is captured
+  const utcNow = new Date();
+  const utcToday = utcNow.toISOString().split("T")[0];
+  const utcYesterday = new Date(utcNow);
+  utcYesterday.setUTCDate(utcNow.getUTCDate() - 1);
+  const utcTomorrow = new Date(utcNow);
+  utcTomorrow.setUTCDate(utcNow.getUTCDate() + 1);
 
   // Fetch today's sessions
   const { data: sessions } = await supabase
     .from("sessions")
     .select("*, doctors(name, specialty)")
     .eq("pharmacy_id", pharmacy.id)
-    .eq("date", today)
+    .gte("date", utcYesterday.toISOString().split("T")[0])
+    .lte("date", utcTomorrow.toISOString().split("T")[0])
+    .neq("status", "cancelled")
+    .order("date")
     .order("start_time");
 
-  // Fetch today's appointments
+  // Fetch today's appointments (UTC window covers all local timezones)
   const { data: todayAppointments } = await supabase
     .from("appointments")
     .select("status, created_at")
     .eq("pharmacy_id", pharmacy.id)
-    .gte("created_at", today + "T00:00:00.000Z")
-    .lte("created_at", today + "T23:59:59.999Z");
+    .gte("created_at", utcYesterday.toISOString().split("T")[0] + "T00:00:00.000Z")
+    .lte("created_at", utcTomorrow.toISOString().split("T")[0] + "T23:59:59.999Z");
 
   // Fetch this month's count
   const monthStart = new Date();

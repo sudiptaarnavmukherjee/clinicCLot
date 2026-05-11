@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 // --- Simple in-memory rate limiter (per IP, resets on cold start) ---
 // For production scale, replace with Upstash Redis.
@@ -114,6 +114,13 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
+    // RPC function may not exist yet (migration not applied) — fall back to direct insert
+    if (error.code === "42883" || error.message?.includes("book_appointment_atomic")) {
+      return await directInsertFallback({
+        session_id, doctor_id, pharmacy_id,
+        patient_name, patient_phone, patient_age, patient_gender, reason, token,
+      });
+    }
     return NextResponse.json({ error: "Booking failed. Please try again." }, { status: 500 });
   }
 
@@ -126,4 +133,90 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ appointment: result });
+}
+
+// Fallback: direct insert used when the atomic RPC function is not deployed yet.
+// Uses the service-role admin client to bypass RLS.
+async function directInsertFallback(params: Record<string, unknown>): Promise<NextResponse> {
+  try {
+    const admin = await createAdminClient();
+    const { session_id, doctor_id, pharmacy_id,
+            patient_name, patient_phone, patient_age, patient_gender, reason, token } = params;
+
+    // Verify session exists, is open, and has capacity
+    const { data: session, error: sessionErr } = await admin
+      .from("sessions")
+      .select("id, max_appointments, status, booking_open")
+      .eq("id", session_id)
+      .single();
+
+    if (sessionErr || !session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    if (!session.booking_open || !["scheduled", "active", "paused"].includes(session.status)) {
+      return NextResponse.json({ error: "This session is no longer accepting bookings" }, { status: 409 });
+    }
+
+    // Count current non-cancelled appointments
+    const { count } = await admin
+      .from("appointments")
+      .select("*", { count: "exact", head: true })
+      .eq("session_id", session_id)
+      .neq("status", "cancelled");
+
+    const currentCount = count ?? 0;
+    if (currentCount >= session.max_appointments) {
+      return NextResponse.json({ error: "This session is full. No more bookings available." }, { status: 409 });
+    }
+
+    const serial = currentCount + 1;
+
+    const { data: apt, error: insertErr } = await admin
+      .from("appointments")
+      .insert({
+        session_id, doctor_id, pharmacy_id,
+        patient_name: String(patient_name).trim(),
+        patient_phone: patient_phone ? String(patient_phone).trim() : null,
+        patient_age: patient_age !== null && patient_age !== "" ? Number(patient_age) : null,
+        patient_gender: patient_gender || null,
+        reason: reason ? String(reason).trim() : null,
+        serial_number: serial,
+        token,
+        status: "waiting",
+      })
+      .select()
+      .single();
+
+    if (insertErr) {
+      // Unique constraint violation — serial conflict, retry with max+1
+      if (insertErr.code === "23505") {
+        const { data: maxRow } = await admin
+          .from("appointments")
+          .select("serial_number")
+          .eq("session_id", session_id)
+          .neq("status", "cancelled")
+          .order("serial_number", { ascending: false })
+          .limit(1)
+          .single();
+        const retrySerial = (maxRow?.serial_number ?? 0) + 1;
+        const { data: retryApt, error: retryErr } = await admin
+          .from("appointments")
+          .insert({ session_id, doctor_id, pharmacy_id,
+            patient_name: String(patient_name).trim(),
+            patient_phone: patient_phone ? String(patient_phone).trim() : null,
+            patient_age: patient_age !== null && patient_age !== "" ? Number(patient_age) : null,
+            patient_gender: patient_gender || null,
+            reason: reason ? String(reason).trim() : null,
+            serial_number: retrySerial, token, status: "waiting" })
+          .select().single();
+        if (retryErr) return NextResponse.json({ error: "Booking failed. Please try again." }, { status: 500 });
+        return NextResponse.json({ appointment: retryApt });
+      }
+      return NextResponse.json({ error: "Booking failed. Please try again." }, { status: 500 });
+    }
+
+    return NextResponse.json({ appointment: apt });
+  } catch {
+    return NextResponse.json({ error: "Booking failed. Please try again." }, { status: 500 });
+  }
 }

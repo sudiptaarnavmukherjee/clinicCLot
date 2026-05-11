@@ -119,7 +119,8 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
   }
 
   const todaySessions = sessions.filter((s) => s.date === today);
-  const pastSessions = sessions.filter((s) => s.date !== today);
+  const upcomingSessions = sessions.filter((s) => s.date > today);
+  const pastSessions = sessions.filter((s) => s.date < today);
 
   function SessionCard({ session }: { session: SessionWithDoctor }) {
     const stats = {
@@ -405,7 +406,24 @@ export default function SessionsClient({ pharmacy, doctors, initialSessions, ope
         </div>
       )}
 
-      {/* Past / upcoming sessions */}
+      {todaySessions.length === 0 && sessions.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-center">
+          <p className="text-amber-800 font-semibold text-sm">No sessions scheduled for today</p>
+          <p className="text-amber-700 text-xs mt-1">Create a session above to start accepting patients, or check upcoming sessions below</p>
+        </div>
+      )}
+
+      {/* Upcoming sessions */}
+      {upcomingSessions.length > 0 && (
+        <div>
+          <h2 className="text-lg font-bold text-foreground mb-4">Upcoming Sessions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {upcomingSessions.map((s) => <SessionCard key={s.id} session={s} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Past sessions */}
       {pastSessions.length > 0 && (
         <div>
           <h2 className="text-lg font-bold text-foreground mb-4">Recent Sessions</h2>

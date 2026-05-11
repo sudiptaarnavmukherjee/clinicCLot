@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import type { Doctor, Pharmacy, Session, Appointment } from "@/lib/types";
 
 type SessionWithAppointments = Session & {
-  appointments: { status: string; serial_number: number }[];
+  appointments: { status: string }[];
 };
 
 interface Props {
