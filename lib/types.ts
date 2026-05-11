@@ -77,6 +77,7 @@ export interface Session {
   status: SessionStatus;
   booking_open: boolean;
   notes: string | null;
+  recurring_session_id: string | null;
   created_at: string;
   updated_at: string;
   doctor?: Doctor;
@@ -86,6 +87,20 @@ export interface Session {
     completed: number;
     total: number;
   };
+}
+
+export interface RecurringSession {
+  id: string;
+  pharmacy_id: string;
+  doctor_id: string;
+  days_of_week: number[];
+  start_time: string;
+  end_time: string;
+  max_appointments: number;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Appointment {
